@@ -9,6 +9,7 @@ drop function if exists course_offering_prereqs_trigger();
 drop function if exists courses_ignore_duplicates();
 drop function if exists students_ignore_duplicates();
 drop function if exists prereqs_ignore_null();
+drop function if exists comp_prereqs(varchar(10),int,varchar(9));
 
 create table students(
 	student_id varchar(9) primary key,
@@ -97,7 +98,7 @@ $BODY$
 begin
 if (select exists(select prereq from prereqs where course_code = new.course_code and term_code = new.term_code))
 then 
-     if not(comp_reqs(new.course_code,new.term_code,new.student_id))
+     if not(comp_prereqs(new.course_code,new.term_code,new.student_id))
      then
 	raise exception 'Prereqs have not been met.';
      end if;
@@ -112,7 +113,7 @@ create trigger course_offering_prereqs_constraint
        for each row 
        execute procedure course_offering_prereqs_trigger();
 
-create function comp_preqs(course_c varchar(10), term_c int, student_i varchar(9))
+create function comp_prereqs(course_c varchar(10), term_c int, student_i varchar(9))
 	returns boolean as
 	$BODY$
 	declare passing boolean; prereq_num int; num_course_taken int;
