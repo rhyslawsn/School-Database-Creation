@@ -97,14 +97,14 @@ $BODY$
 begin
 if (select exists(select prereq from prereqs where course_code = new.course_code and term_code = new.term_code))
 then 
-     if(select exists(select 1 from enrollments 
+     if(select count(*) from (select 1 from enrollments 
      	       		     where course_code = (select prereq from prereqs 
 			     	   	       	 	 where course_code = new.course_code
 			     	   	       	 	 and term_code = new.term_code)
 			     and student_id = new.student_id
-			     and term_code < new.term_code)as middle_stmt) > 0
+			     and term_code < new.term_code)) > 0
      then
-	if(select exists(select course_code from (select course_code, term_code, final_grade from enrollments
+	if(select count(*) from (select course_code from (select course_code, term_code, final_grade from enrollments
 		  			    	 	where course_code = (select prereq from prereqs
 							       		     	     where course_code = new.course_code
 										     and term_code = new.term_code)
@@ -112,7 +112,7 @@ then
 							and term_code < new.term_code) as pre
 		  where final_grade >= 50
 		  and course_code = new.course_code
-		  and term_code = new.term_code)as center_stmt) > 0
+		  and term_code = new.term_code)) > 0
 	then
 		/*Everything checks out*/
 		
