@@ -97,26 +97,9 @@ $BODY$
 begin
 if (select exists(select prereq from prereqs where course_code = new.course_code and term_code = new.term_code))
 then 
-     if(select exists(select 1 from enrollments 
-     	       		     where course_code = (select prereq from prereqs 
-			     	   	       	 	 where course_code = new.course_code
-			     	   	       	 	 and term_code = new.term_code)
-			     and student_id = new.student_id
-			     and term_code < new.term_code)as middle_stmt) > 0
+     if not(comp_reqs(new.course_code,new.term_code,new.student_id))
      then
-	if(select exists(select course_code from (select course_code, term_code, final_grade from enrollments
-		  			    	 	where course_code = (select prereq from prereqs
-							       		     	     where course_code = new.course_code
-										     and term_code = new.term_code)
-							and student_id = new.student_id
-							and term_code < new.term_code) as pre
-		  where final_grade >= 50
-		  and course_code = new.course_code
-		  and term_code = new.term_code)as center_stmt) > 0
-	then
-		/*Everything checks out*/
-		
-	end if;
+	raise exception 'Prereqs have not been met.';
      end if;
 end if;
 return new;
@@ -128,6 +111,35 @@ create trigger course_offering_prereqs_constraint
        after insert or update on enrollments 
        for each row 
        execute procedure course_offering_prereqs_trigger();
+
+create function comp_preqs(course_c varchar(10), term_c int, student_i varchar(9))
+	returns boolean as
+	$BODY$
+	declare passing boolean; prereq_num int; num_course_taken int;
+	begin
+	create table prereq_needed on commit drop
+		as (select prereq from prereqs
+			where course_code = course_c
+			and term_code = term_c);
+	create table prereq_deets as (select course_code, term_code, grade from enrollments natural join prereq_needed
+			where course_code = prereq and student_id = student_i);
+	select count(*) from prereq_needed into prereq_num;
+	select count(*) from prereq_deets into num_course_taken;
+	
+	if (prerq_num > num_course_taken) then
+		drop table if exists prereq_needed;
+		drop table if exists prereq_deets;
+		return false;
+	end if;
+	select exists(select final_grade from prereq_deets where final_grade > 50)
+		and not
+		exists (select final_grade from prereq_deets where final_grade < 50) into passing;
+	drop table if exists prereq_needed;
+	drop table if exists prereq_deets;
+	return passing;
+	end
+	$BODY$
+	language plpgsql;
 
 create function students_ignore_duplicates()
 returns trigger as
