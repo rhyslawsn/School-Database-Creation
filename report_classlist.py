@@ -9,6 +9,15 @@
 
 import psycopg2, sys
 
+psql_user = 'rhysl' #Change this to your username
+psql_db = 'rhysl' #Change this to your personal DB name
+psql_password = 'V00818835' #Put your password (as a string) here
+psql_server = 'studdb1.csc.uvic.ca'
+psql_port = 5432
+
+conn = psycopg2.connect(dbname=psql_db,user=psql_user,password=psql_password,host=psql_server,port=psql_port)
+cursor = conn.cursor()
+
 def print_header(course_code, course_name, term, instructor_name):
 	print("Class list for %s (%s)"%(str(course_code), str(course_name)) )
 	print("  Term %s"%(str(term), ) )
@@ -23,27 +32,33 @@ def print_row(student_id, student_name, grade):
 def print_footer(total_enrolled, max_capacity):
 	print("%s/%s students enrolled"%(str(total_enrolled),str(max_capacity)) )
 
-
-''' The lines below would be helpful in your solution
 if len(sys.argv) < 3:
 	print('Usage: %s <course code> <term>'%sys.argv[0], file=sys.stderr)
 	sys.exit(0)
 	
 course_code, term = sys.argv[1:3]
-'''
 
+cursor.execute("select course_code,course_name,term_code,instructor_name from course_offerings where course_code = %s and term_code = %s;",(course_code,term))
 
-# Mockup: Print a class list for CSC 370
-course_code = 'CSC 370'
-course_name = 'Database Systems'
-course_term = 201801
-instructor_name = 'Bill Bird'
-print_header(course_code, course_name, course_term, instructor_name)
+row = cursor.fetchone()
 
-#Print records for a few students
-print_row('V00123456', 'Rebecca Raspberry', 81)
-print_row('V00123457', 'Alissa Aubergine', 90)
-print_row('V00123458', 'Neal Naranja', 83)
+print_header(row[0],row[1],row[2],row[3])
 
-#Print the last line (enrollment/max_capacity)
-print_footer(3,150)
+cursor.execute("""select student_id,name,final_grade from students natural join enrollments where course_code = %s and term_code = %s;""",(course_code,term))
+
+rows_found = 0
+while True:
+	row = cursor.fetchone()
+	if row is None:
+		break
+	rows_found += 1
+	print_row(row[0],row[1],row[2])
+
+cursor.execute("""select (select count(*) from enrollments where course_code = %s and term_code = %s), max_cap from course_offerings where course_code = %s and term_code = %s;""",(course_code,term,course_code,term))
+
+row = cursor.fetchone()
+
+print_footer(row[0],row[1])
+
+cursor.close()
+conn.close()

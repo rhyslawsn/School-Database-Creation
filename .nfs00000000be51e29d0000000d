@@ -10,7 +10,6 @@ drop function if exists courses_ignore_duplicates();
 drop function if exists students_ignore_duplicates();
 drop function if exists prereqs_ignore_null();
 drop function if exists comp_prereqs(varchar(10),int,varchar(9));
-drop function if exists check_final_grades(varchar(10),int,varchar(9),int);
 
 create table students(
 	student_id varchar(9) primary key,
@@ -101,7 +100,7 @@ if (select exists(select prereq from prereqs where course_code = new.course_code
 then 
      if not(comp_prereqs(new.course_code,new.term_code,new.student_id))
      then
-	/*Prereqs were not met*/
+	raise exception 'Prereqs have not been met.';
      end if;
 end if;
 return new;
@@ -122,12 +121,12 @@ create function comp_prereqs(course_c varchar(10), term_c int, student_i varchar
 	create table prereq_needed as (select prereq from prereqs
 			where course_code = course_c
 			and term_code = term_c);
-	create table prereq_deets as (select course_code, term_code, final_grade from enrollments natural join prereq_needed
+	create table prereq_deets as (select course_code, term_code, grade from enrollments natural join prereq_needed
 			where course_code = prereq and student_id = student_i);
 	select count(*) from prereq_needed into prereq_num;
 	select count(*) from prereq_deets into num_course_taken;
 	
-	if (prereq_num > num_course_taken) then
+	if (prerq_num > num_course_taken) then
 		drop table if exists prereq_needed;
 		drop table if exists prereq_deets;
 		return false;
@@ -148,7 +147,7 @@ create function check_final_grades(compl_course varchar(10), compl_term int, com
 	declare passing boolean;
 	begin
 		/*return(with prereq_course_taken as (select prereq from prereqs where course_code = compl_course and term_code = compl_term),
-			prereq_deets as (select course_code, term_code, final_grade from enrollments natural join prereq_course_taken));*/
+			prereq_deets as (select course_code, term_code, grade from enrollments natural join prereq_course_taken));*/
 	end
 	$BODY$
 	language plpgsql;	

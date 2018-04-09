@@ -28,7 +28,9 @@ with open(input_filename) as f:
 		if len(row) < 4:
 			print("Error: Invalid input line \"%s\""%(','.join(row)), file=sys.stderr)
 			#Maybe abort the active transaction and roll back at this point?
-			conn.rollback();
+			conn.rollback()
+			cursor.close()
+			conn.close()
 			break
 		code, name, term, instructor, capacity = row[0:5]
 		prerequisites = row[5:] #List of zero or more items
@@ -48,11 +50,17 @@ with open(input_filename) as f:
 			print("Caught a ProgrammingError:",file=sys.stderr)
 			print(err,file=sys.stderr)
 			conn.rollback()
+			cursor.close()
+			conn.close()
+			sys.exit()
 		except psycopg2.IntegrityError as err: 
 			#IntegrityError occurs when a constraint (primary key, foreign key, check constraint or trigger constraint) is violated.
 			print("Caught an IntegrityError:",file=sys.stderr)
 			print(err,file=sys.stderr)
 			conn.rollback()
+			cursor.close()
+			conn.close()
+			sys.exit()
 		except psycopg2.InternalError as err:  
 			#InternalError generally represents a legitimate connection error, but may occur in conjunction with user defined functions.
 			#In particular, InternalError occurs if you attempt to continue using a cursor object after the transaction has been aborted.
@@ -60,3 +68,8 @@ with open(input_filename) as f:
 			print("Caught an IntegrityError:",file=sys.stderr)
 			print(err,file=sys.stderr)
 			conn.rollback()
+			cursor.close()
+			conn.close()
+			sys.exit()
+cursor.close()
+conn.close()
