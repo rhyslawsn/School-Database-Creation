@@ -1,0 +1,154 @@
+drop table if exists enrollments;
+drop table if exists students;
+drop table if exists prereqs;
+drop table if exists course_offerings;
+drop table if exists courses;
+
+drop function if exists course_offering_size_trigger();
+drop function if exists course_offering_prereqs_trigger();
+
+create table students(
+	student_id varchar(9) primary key,
+	name varchar(255) not null,
+
+	unique(student_id, name),
+
+	check(length(student_id) > 0),
+	check(length(name) > 0));
+
+create table courses(
+       course_code varchar(10) primary key);
+
+create table course_offerings(
+        course_code varchar(10),
+	course_name varchar(128),
+	term_code int,
+	max_cap int not null,
+	instructor_name	varchar(255) not null,
+
+	unique(course_code,term_code),
+
+	primary key(course_code, term_code),
+	foreign key(course_code) references courses(course_code)
+		on delete restrict
+		on update cascade,
+
+	check(length(course_name) > 0),
+	check(max_cap >= 0),
+	check(length(instructor_name) > 0));
+
+create table prereqs(
+        course_code varchar(10),
+        term_code int,
+        prereq varchar(10),       
+
+        primary key(course_code,term_code,prereq),
+        foreign key(course_code,term_code) references course_offerings(course_code,term_code)
+       	        on delete restrict
+	        on update cascade,	       
+
+	check(length(course_code) > 0),
+	check(length(prereq) > 0));
+
+create table enrollments(
+        student_id varchar(9) not null,
+        course_code varchar(10) not null,
+        term_code int not null,
+        final_grade int null,
+
+        unique(student_id,course_code,term_code,final_grade),
+
+        primary key(student_id,course_code,term_code),
+        foreign key(student_id) references students(student_id)
+       	        on delete restrict
+	        on update cascade,
+	foreign key(course_code,term_code) references course_offerings(course_code,term_code)
+	        on delete restrict
+	        on update cascade,
+
+       check(length(student_id) > 0),
+       check(final_grade >= 0 and final_grade <= 100));
+
+create function course_offering_size_trigger()
+returns trigger as
+$BODY$
+begin
+if (select count(*) from enrollments
+   where course_code = new.course_code and term_code = new.term_code) > (select max_cap from course_offerings where course_code = new.course_code and term_code = new.term_code)
+then 
+     raise exception 'Course is full.';
+end if;
+return new;
+end
+$BODY$
+language plpgsql;
+
+create trigger course_offering_size_constraint
+       after insert or update on enrollments 
+       for each row 
+       execute procedure course_offering_size_trigger();
+
+create function course_offering_prereqs_trigger()
+returns trigger as
+$BODY$
+begin
+if (select exists(select prereq from prereqs where course_code = new.course_code and term_code = new.term_code))
+then 
+     if(select exists(select course_code from enrollments 
+     	       		     where course_code = (select prereq from prereqs 
+			     	   	       	 	 where course_code = new.course_code
+			     	   	       	 	 and term_code = new.term_code)
+			     and student_id = new.student_id
+			     and term_code < new.term_code))
+     then
+	if(select exists(select course_code from (select course_code, term_code, final_grade from enrollments
+		  			    	 	where course_code = (select prereq from prereqs
+							       		     	     where course_code = new.course_code
+										     and term_code = new.term_code)
+							and student_id = new.student_id
+							and term_code < new.term_code) as pre
+		  where final_grade >= 50
+		  and course_code = new.course_code
+		  and term_code = new.term_code))
+	then
+		/*Everything checks out*/
+	else
+		raise exception 'Student has failed this course.';
+	end if;
+     else
+	raise exception 'Student doesnt have the prerequisites.';
+     end if;
+else
+     /*No prerequisites for this course*/
+end if;
+return new;
+end
+$BODY$
+language plpgsql;
+
+create trigger course_offering_prereqs_constraint
+       after insert or update on enrollments 
+       for each row 
+       execute procedure course_offering_prereqs_trigger();
+
+insert into students values('V00818835','Rhys Lawson');
+insert into students values('V00818834','Rhys Lawson');
+insert into students values('V00818836','Kevin Virtue');
+
+insert into courses values('CSC 110');
+insert into courses values('SENG 265');
+insert into courses values('RHYS 420');
+insert into courses values('');
+
+insert into course_offerings values('CSC 110','This is a course',201701,400,'B Bird');
+insert into course_offerings values('CSC 110','Fundamental Programming: I',201609,2,'B Bird');
+insert into course_offerings values('SENG 265','Software Developement',201703,300,'Rhys');
+insert into course_offerings values('SENG 265','Software Developement',201701,300,'Rhys');
+
+insert into prereqs values('CSC 110',201701,'SENG 265');
+
+insert into enrollments values('V00818835','SENG 265',201703,49);
+insert into enrollments values('V00818835','CSC 110',201701,89);
+insert into enrollments values('V00818835','CSC 110',201609,23);
+insert into enrollments values('V00818834','CSC 110',201609,69);
+insert into enrollments values('V00818836','CSC 110',201609,33);
